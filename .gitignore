@@ -1,0 +1,9 @@
+*.tar
+dataset/
+data/
+wandb/
+checkpoints/
+*.pth
+__pycache__/
+.vscode/
+*.csv
