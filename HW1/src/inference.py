@@ -37,21 +37,31 @@ class TestDataset(Dataset):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Inference for HW1 image classification")
-    parser.add_argument("--test_dir", type=str, default="../dataset/data/test", help="Path to test image directory")
-    parser.add_argument("--checkpoint", type=str, required=True, help="Path to model checkpoint (.pth)")
-    parser.add_argument("--output_csv", type=str, default="prediction.csv", help="Output CSV path")
+    parser = argparse.ArgumentParser(
+        description="Inference for HW1 image classification"
+    )
+    parser.add_argument("--test_dir", type=str,
+                        default="../dataset/data/test",
+                        help="Path to test image directory")
+    parser.add_argument("--checkpoint", type=str, required=True,
+                        help="Path to model checkpoint (.pth)")
+    parser.add_argument("--output_csv", type=str, default="prediction.csv",
+                        help="Output CSV path")
 
-    parser.add_argument("--backbone", type=str, default="resnet101", choices=["resnet50", "resnet101", "resnet152"])
+    parser.add_argument("--backbone", type=str, default="resnet101",
+                        choices=["resnet50", "resnet101", "resnet152"])
     parser.add_argument("--num_classes", type=int, default=100)
     parser.add_argument("--dropout", type=float, default=0.5)
-    parser.add_argument("--use_deeper_fc", action="store_true", help="Set this if checkpoint was trained with --use_deeper_fc")
+    parser.add_argument("--use_deeper_fc", action="store_true",
+                        help="Set if trained with --use_deeper_fc")
 
     parser.add_argument("--img_size", type=int, default=224)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--num_workers", type=int, default=4)
-    parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"])
-    parser.add_argument("--use_tta", action="store_true", help="Use 7-view TTA (base + 6 transforms)")
+    parser.add_argument("--device", type=str, default="cuda",
+                        choices=["cuda", "cpu"])
+    parser.add_argument("--use_tta", action="store_true",
+                        help="Use 7-view TTA (base + 6 transforms)")
 
     return parser.parse_args()
 
@@ -60,68 +70,50 @@ def get_tta_transforms(img_size):
     """Return 7 transforms: base + 6 additional TTA transforms."""
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
-    resize_size = int(img_size * 1.14)
+    res_s = int(img_size * 1.14)  # resize_size
 
     base = get_val_transforms(img_size=img_size)
 
     tta_1 = v2.Compose([
-        v2.Resize((resize_size, resize_size)),
-        v2.Lambda(lambda img: TF.crop(img, top=0, left=0, height=img_size, width=img_size)),
+        v2.Resize((res_s, res_s)),
+        v2.Lambda(lambda img: TF.crop(img, 0, 0, img_size, img_size)),
         v2.ToImage(),
         v2.ToDtype(dtype=torch.float32, scale=True),
         v2.Normalize(mean=mean, std=std),
     ])
 
     tta_2 = v2.Compose([
-        v2.Resize((resize_size, resize_size)),
-        v2.Lambda(
-            lambda img: TF.crop(
-                img,
-                top=0,
-                left=resize_size - img_size,
-                height=img_size,
-                width=img_size,
-            )
-        ),
+        v2.Resize((res_s, res_s)),
+        v2.Lambda(lambda img: TF.crop(
+            img, 0, res_s - img_size, img_size, img_size
+        )),
         v2.ToImage(),
         v2.ToDtype(dtype=torch.float32, scale=True),
         v2.Normalize(mean=mean, std=std),
     ])
 
     tta_3 = v2.Compose([
-        v2.Resize((resize_size, resize_size)),
-        v2.Lambda(
-            lambda img: TF.crop(
-                img,
-                top=resize_size - img_size,
-                left=0,
-                height=img_size,
-                width=img_size,
-            )
-        ),
+        v2.Resize((res_s, res_s)),
+        v2.Lambda(lambda img: TF.crop(
+            img, res_s - img_size, 0, img_size, img_size
+        )),
         v2.ToImage(),
         v2.ToDtype(dtype=torch.float32, scale=True),
         v2.Normalize(mean=mean, std=std),
     ])
 
     tta_4 = v2.Compose([
-        v2.Resize((resize_size, resize_size)),
-        v2.Lambda(
-            lambda img: TF.crop(
-                img,
-                top=resize_size - img_size,
-                left=resize_size - img_size,
-                height=img_size,
-                width=img_size,
-            )
-        ),
+        v2.Resize((res_s, res_s)),
+        v2.Lambda(lambda img: TF.crop(
+            img, res_s - img_size, res_s - img_size, img_size, img_size
+        )),
         v2.ToImage(),
         v2.ToDtype(dtype=torch.float32, scale=True),
         v2.Normalize(mean=mean, std=std),
     ])
 
     tta_5 = v2.Compose([
-        v2.Resize(resize_size),
+        v2.Resize(res_s),
         v2.CenterCrop(img_size),
         v2.Lambda(lambda img: TF.hflip(img)),
         v2.ToImage(),
@@ -130,7 +122,7 @@ def get_tta_transforms(img_size):
     ])
 
     tta_6 = v2.Compose([
-        v2.Resize(resize_size),
+        v2.Resize(res_s),
         v2.CenterCrop(img_size),
         v2.Lambda(lambda img: TF.rotate(img, angle=10.0)),
         v2.ToImage(),
@@ -141,7 +133,8 @@ def get_tta_transforms(img_size):
     return [base, tta_1, tta_2, tta_3, tta_4, tta_5, tta_6]
 
 
-def load_model(checkpoint_path, backbone, num_classes, dropout, use_deeper_fc, device):
+def load_model(checkpoint_path, backbone, num_classes, dropout,
+               use_deeper_fc, device):
     model = get_model(
         backbone=backbone,
         num_classes=num_classes,
@@ -157,7 +150,8 @@ def load_model(checkpoint_path, backbone, num_classes, dropout, use_deeper_fc, d
         state_dict = checkpoint
 
     if len(state_dict) > 0 and next(iter(state_dict)).startswith("module."):
-        state_dict = {k.replace("module.", "", 1): v for k, v in state_dict.items()}
+        state_dict = {k.replace("module.", "", 1): v
+                      for k, v in state_dict.items()}
 
     model.load_state_dict(state_dict, strict=True)
     model.to(device)
@@ -226,9 +220,9 @@ def main():
         image_stem = os.path.splitext(image_name)[0]
         predictions.append((image_stem, int(pred_label)))
 
-    output_dir = os.path.dirname(args.output_csv)
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
+    out_dir = os.path.dirname(args.output_csv)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
     with open(args.output_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)

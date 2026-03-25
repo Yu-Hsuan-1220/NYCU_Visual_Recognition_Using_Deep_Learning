@@ -27,8 +27,11 @@ def read_prediction_csv(csv_path):
     preds = {}
     with open(csv_path, "r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        if "image_name" not in reader.fieldnames or "pred_label" not in reader.fieldnames:
-            raise ValueError(f"Invalid header in {csv_path}, expect image_name,pred_label")
+        if ("image_name" not in reader.fieldnames or
+                "pred_label" not in reader.fieldnames):
+            raise ValueError(
+                f"Invalid header in {csv_path}, expect image_name, pred_label"
+            )
         for row in reader:
             image_name = row["image_name"].strip()
             pred_label = int(row["pred_label"])
@@ -38,7 +41,6 @@ def read_prediction_csv(csv_path):
 
 def majority_vote(labels):
     counter = Counter(labels)
-    # Deterministic tie-breaker: choose the smallest class id among max-count labels.
     max_count = max(counter.values())
     candidates = [k for k, v in counter.items() if v == max_count]
     return min(candidates)
