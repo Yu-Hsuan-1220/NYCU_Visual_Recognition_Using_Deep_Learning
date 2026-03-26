@@ -7,3 +7,11 @@ checkpoints/
 __pycache__/
 .vscode/
 *.csv
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.xml
+*.gz
+*.bcf
