@@ -84,3 +84,11 @@ python voting.py --input_csvs prediction3.csv prediction2.csv prediction1.csv
 ```
 
 ## Performance Snapshot
+
+### Training accuracy and validation accuracy curve
+
+![Training curve]( ./report/figures/train_result.png "Training accuracy and validation accuracy curve")
+
+### Validation accuracy and test accuracy of each backbone
+
+![Validation and test accuracy]( ./report/figures/val_test_performance_table.png "Validation accuracy and test accuracy of each backbone")
