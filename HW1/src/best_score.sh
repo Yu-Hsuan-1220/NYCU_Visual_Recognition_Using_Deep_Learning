@@ -27,4 +27,4 @@ python /project2/YuHsuanLee/VRDL/HW1/src/inference.py --backbone resnet152 --dro
 
 # voting
 
-python /project2/YuHsuanLee/VRDL/HW1/src/voting.py --input_csvs prediction3.csv prediction2.csv prediction1.csv \
+python /project2/YuHsuanLee/VRDL/HW1/src/voting.py --input_csvs prediction3.csv prediction2.csv prediction1.csv
