@@ -43,7 +43,8 @@ def parse_args():
 
     # Model arguments
     parser.add_argument('--backbone', type=str, default='resnet50',
-                        choices=['resnet50', 'resnet101', 'resnet152'],
+                        choices=['resnet50', 'resnet101', 'resnet152',
+                                 'resnext101'],
                         help='Backbone architecture')
     parser.add_argument('--pretrained', action='store_true', default=True,
                         help='Use pretrained weights')

@@ -3,9 +3,11 @@ from torchvision.models import (
     ResNet50_Weights,
     ResNet101_Weights,
     ResNet152_Weights,
+    ResNeXt101_32X8D_Weights,
     resnet50,
     resnet101,
-    resnet152
+    resnet152,
+    resnext101_32x8d
 )
 
 
@@ -61,10 +63,19 @@ class ResNetClassifier(nn.Module):
                 weights = None
                 print("Loading ResNet152 without pretrained weights")
             self.backbone = resnet152(weights=weights)
+
+        elif backbone == 'resnext101':
+            if pretrained:
+                weights = ResNeXt101_32X8D_Weights.IMAGENET1K_V2
+                print("Loading ResNeXt101_32x8d with ImageNet V2 pretrained weights")
+            else:
+                weights = None
+                print("Loading ResNeXt101_32x8d without pretrained weights")
+            self.backbone = resnext101_32x8d(weights=weights)
         else:
             raise ValueError(
                 f"Unsupported backbone: {backbone}. "
-                "Choose 'resnet50', 'resnet101', or 'resnet152'"
+                "Choose 'resnet50', 'resnet101', 'resnet152', or 'resnext101'"
             )
 
         in_features = self.backbone.fc.in_features

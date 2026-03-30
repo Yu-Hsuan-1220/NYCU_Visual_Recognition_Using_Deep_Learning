@@ -49,7 +49,8 @@ def parse_args():
                         help="Output CSV path")
 
     parser.add_argument("--backbone", type=str, default="resnet101",
-                        choices=["resnet50", "resnet101", "resnet152"])
+                        choices=["resnet50", "resnet101", "resnet152",
+                                 "resnext101"])
     parser.add_argument("--num_classes", type=int, default=100)
     parser.add_argument("--dropout", type=float, default=0.5)
     parser.add_argument("--use_deeper_fc", action="store_true",
