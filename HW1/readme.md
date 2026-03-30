@@ -1,8 +1,8 @@
-#VRDL HW1
+# VRDL HW1
 
 ## Introduction
 
-The gaol of this homework is a image classification task with 100 classes. 
+The goal of this homework is an image classification task with 100 classes.
 
 The core idea of this project is to leverage Transfer Learning with an Ensemble of ResNet Backbones (ResNet-50, ResNet-101, and ResNet-152) pre-trained on ImageNet-1K (V2 weights).
 
