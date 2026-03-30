@@ -85,6 +85,12 @@ python voting.py --input_csvs prediction3.csv prediction2.csv prediction1.csv
 
 ## Performance Snapshot
 
+
+### screenshot of the leaderboard
+
+![Leaderboard]( ./report/figures/leaderboard.png "Leaderboard")
+
+
 ### Training accuracy and validation accuracy curve
 
 ![Training curve]( ./report/figures/train_result.png "Training accuracy and validation accuracy curve")

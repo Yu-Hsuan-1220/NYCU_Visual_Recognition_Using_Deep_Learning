@@ -88,7 +88,7 @@ heightrounded, % to avoid spurious underfull messages
 
 \section{Introduction}
 In this assignment, we need to work on a multi-class classfication task involving 100 distinct object categories.
-The dataset consist of approximately 21,024 traing/validation images and 2344 test images. The primary challenge lies 
+The dataset consist of approximately 21,024 traing/validation images and 2344 test images. 
 The primary challenge is achieving high generalization performance with a small number of sample per category
 while confining to the constraint that the model backbone must be ResNet-based architecture with fewer than 100 million parameters.
 
@@ -122,7 +122,7 @@ We utilize ResNet-50, ResNet-101, and ResNet-152 backbones, which are all well w
 \end{itemize}
 
 \subsection{Inference and Test-Time Augmentation}
-To maximize test accuracy, we implemented a 7-view Test-Time Augmentation (TTA) strategy. For each test image, we generated seven versions: the original center-cropped image, four corner crops, horizontal flips and rotations. The final prediction was determined by Soft Voting, which averages the softmax probability distributions across all five views to produce a more reliable class assignment.
+To maximize test accuracy, we implemented a 7-view Test-Time Augmentation (TTA) strategy. For each test image, we generated seven versions: the original center-cropped image, four corner crops, horizontal flips and small rotations. The final prediction was determined by Soft Voting, which averages the softmax probability distributions across all seven views to produce a more reliable class assignment.
 
 
 \section{Results}
@@ -136,15 +136,15 @@ The following settings represent the optimized configuration used to produce our
     \item \textbf{Model Backbones}: An ensemble of ResNet-50, ResNet-101, and ResNet-152, all utilizing ImageNet-1K V2 pre-trained weights. And only use one fc layer as the classification head for all three backbones to reduce the risk of overfitting.
     \item \textbf{Data Augmentation \& Regularization}:
     \begin{itemize}
-        \item \textbf{Augmentation}: RandAugment, Mixup ($\alpha=1.0$), and CutMix ($\alpha=1.0$).
-        \item \textbf{Regularization}: Label Smoothing (0.1) and Dropout (0.5).
+        \item \textbf{Augmentation}: RandResizedCrop, RandAugment, Mixup ($\alpha=1.0$), and CutMix ($\alpha=1.0$).
+        \item \textbf{Regularization}: Weight Decay($5 \times 10^{-4}$), Label Smoothing (0.1) and Dropout (0.5).
         \item \textbf{Spatial Invariance}: RandomResizedCrop with a scale of (0.08, 1.0).
     \end{itemize}
     \item \textbf{Optimization}:
     \begin{itemize}
         \item \textbf{Optimizer}: AdamW with a weight decay of $5 \times 10^{-4}$.
         \item \textbf{Learning Rate}: $1 \times 10^{-3}$ (FC head) and $1 \times 10^{-4}$ (Backbone).
-        \item \textbf{Scheduler}: Cosine Annealing with a Warmup phase (5 or 10 epochs).
+        \item \textbf{Scheduler}: Cosine Annealing.
     \end{itemize}
     \item \textbf{Other Training Settings}:
     \begin{itemize}
@@ -152,7 +152,7 @@ The following settings represent the optimized configuration used to produce our
         \item \textbf{Epochs}: 100 for ResNet-50 and ResNet-101, 200 for ResNet-152. Since ResNet-152 has a higher capacity, it benefits from a longer training epochs.
         \item \textbf{Backbone Freezing}: During the Warmup phase, the backbone was frozen to allow the new classification head to stabilize before fine-tuning the entire network. 5 epochs for ResNet-50 and ResNet-101, 10 epochs for ResNet-152.
     \end{itemize}
-    \item \textbf{Inference Strategy}: 7-view TTA (including center/corner crops, horizontal flips, and rotations) combined with Soft Voting before the final Majority Vote ensemble.
+    \item \textbf{Inference Strategy}: 7-view TTA (including center/corner crops, horizontal flips, and small rotations) combined with Soft Voting (addition of output probabilities) before the final Majority Vote ensemble.
 \end{itemize}
 
 \subsection{Final Performance}
@@ -200,7 +200,7 @@ The training and validation curves for our primary models are illustrated in Fig
 To further understand the contribution of each component in our training "recipe," we conducted some ablation studies 
 on the ResNet-50 and ResNet-152 backbone. Note that since validation data is small (only contain 300 samples), the validation result will contain high variance. But we can still observe the general trend of the training and validation curves to understand the impact of each component.
 \subsection{Impact of RandAugment}
-We conducted a experiment show in Figure \ref{fig:without_aug} and found that without the diverse pixel-level and geometric transformations 
+We conducted a experiment show in Figure \ref{fig:without_aug} since I thought that without the diverse pixel-level and geometric transformations 
 provided by RandAugment, the model would easily overfit to 
 the limited training samples, failing to learn generalized features.
 \begin{figure}[h]
@@ -214,7 +214,7 @@ the limited training samples, failing to learn generalized features.
 \end{figure}
 
 \subsection{Impact of Mixup and CutMix}
-The experiment in Figure \ref{fig:without_mix} showed that without Mixup and CutMix, the validation accuracy would drop, and the model would be more prone to overfit the training data.
+We conducted an experiment shown in Figure \ref{fig:without_mix} since we thought that without Mixup and CutMix, the validation accuracy would drop, and the model would be more prone to overfit the training data.
 
 \begin{figure}[h]
     \centering
@@ -230,7 +230,7 @@ The experiment in Figure \ref{fig:without_mix} showed that without Mixup and Cut
 \end{figure}
 
 \subsection{Impact of weight decay}
-The experiment in Figure \ref{fig:without_wd} is the expriment without weight decay. we compared the training dynamics of ResNet-152 with and without Weight Decay (WD) ($\lambda = 5 \times 10^{-4}$).
+The experiment in Figure \ref{fig:without_wd} is the expriment without weight decay. We assume that without weight decay, the model weight might grow excessively, leading to overfitting. We compared the training dynamics of ResNet-152 with and without Weight Decay (WD) ($\lambda = 5 \times 10^{-4}$).
 
 \begin{figure}[h]
     \centering
