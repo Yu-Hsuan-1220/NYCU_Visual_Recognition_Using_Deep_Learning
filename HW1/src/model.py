@@ -67,7 +67,8 @@ class ResNetClassifier(nn.Module):
         elif backbone == 'resnext101':
             if pretrained:
                 weights = ResNeXt101_32X8D_Weights.IMAGENET1K_V2
-                print("Loading ResNeXt101_32x8d with ImageNet V2 pretrained weights")
+                print("Loading ResNeXt101_32x8d  \
+                with ImageNet V2 pretrained weights")
             else:
                 weights = None
                 print("Loading ResNeXt101_32x8d without pretrained weights")
