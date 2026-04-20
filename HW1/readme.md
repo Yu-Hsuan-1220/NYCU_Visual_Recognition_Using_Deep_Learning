@@ -1,5 +1,7 @@
 # VRDL HW1
 
+112550011 李佑軒
+
 ## Introduction
 
 The goal of this homework is an image classification task with 100 classes.
