@@ -95,4 +95,16 @@ python train.py /
 python inference.py \
 --checkpoint ./output_phase2/best.pth \
 --score_threshold 0.01 
+```
 
+## Performance snapshot
+
+### screenshot of the leaderboard
+
+![Leaderboard]( ./report/figures/leaderboard.png "Leaderboard")
+
+### Training loss and validation accuracy curve
+
+![Training curve]( ./report/figures/phase1_training_curve.png "Training loss and validation accuracy curve Phase 1")
+
+![Training curve]( ./report/figures/phase2_training_curve.png "Training loss and validation accuracy curve Phase 2")
