@@ -103,7 +103,7 @@ python inference.py \
 
 ![Leaderboard]( ./report/figures/leaderboard.png "Leaderboard")
 
-### Training loss and validation accuracy curve
+### Training loss and validation accuracy curve for two phases
 
 ![Training curve]( ./report/figures/phase1_training_curve.png "Training loss and validation accuracy curve Phase 1")
 
