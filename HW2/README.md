@@ -1,6 +1,7 @@
 # VRDL HW2
 
-112550011 李佑軒
+- Student ID: 112550011 
+- Name: 李佑軒
 
 ## Introduction 
 
