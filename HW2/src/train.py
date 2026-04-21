@@ -47,10 +47,14 @@ def get_args():
     p.add_argument("--no_aux_loss", dest="aux_loss", action="store_false")
     p.add_argument("--with_box_refine", action="store_true", default=False)
     p.add_argument("--pretrained_backbone", action="store_true", default=True)
-    p.add_argument("--no_pretrained_backbone", dest="pretrained_backbone",
-                   action="store_false")
-    p.add_argument("--freeze_at", type=int, default=1,
-                   help="Freeze backbone up to this stage (0=none, 1=layer0+1, 2=+layer2)")
+    p.add_argument(
+        "--no_pretrained_backbone", dest="pretrained_backbone",
+        action="store_false"
+    )
+    p.add_argument(
+        "--freeze_at", type=int, default=1,
+        help="Freeze backbone up to stage (0=none, 1=layer0+1, 2=+layer2)"
+    )
 
     # --- Loss ---
     p.add_argument("--cost_class", type=float, default=2.0)
@@ -59,8 +63,10 @@ def get_args():
     p.add_argument("--loss_ce_coef", type=float, default=2.0)
     p.add_argument("--loss_bbox_coef", type=float, default=5.0)
     p.add_argument("--loss_giou_coef", type=float, default=2.0)
-    p.add_argument("--eos_coef", type=float, default=0.1,
-                   help="No-object class weight for CE loss")
+    p.add_argument(
+        "--eos_coef", type=float, default=0.1,
+        help="No-object class weight for CE loss"
+    )
     p.add_argument("--focal_loss", action="store_true", default=False)
     p.add_argument("--focal_alpha", type=float, default=0.25)
     p.add_argument("--focal_gamma", type=float, default=2.0)
@@ -73,75 +79,78 @@ def get_args():
     p.add_argument("--weight_decay", type=float, default=1e-4)
     p.add_argument("--clip_max_norm", type=float, default=0.1)
     p.add_argument("--accumulate_steps", type=int, default=2)
-    p.add_argument("--lr_scheduler", choices=["step", "cosine"], default="cosine")
+    p.add_argument(
+        "--lr_scheduler", choices=["step", "cosine"], default="cosine"
+    )
     p.add_argument("--lr_drop_epochs", type=int, nargs="+", default=[150])
     p.add_argument("--warmup_epochs", type=int, default=10)
-    p.add_argument("--lr_min_ratio", type=float, default=1e-2,
-                   help="Min LR ratio for cosine scheduler")
-    p.add_argument("--amp", action="store_true", default=False,
-                   help="Use automatic mixed precision")
+    p.add_argument(
+        "--lr_min_ratio", type=float, default=1e-2,
+        help="Min LR ratio for cosine scheduler"
+    )
+    p.add_argument(
+        "--amp", action="store_true", default=False,
+        help="Use automatic mixed precision"
+    )
 
     # --- EMA ---
-    p.add_argument("--ema_decay", type=float, default=0.0,
-                   help="EMA decay (0 = disabled)")
+    p.add_argument(
+        "--ema_decay", type=float, default=0.0,
+        help="EMA decay (0 = disabled)"
+    )
 
     # --- Augmentation ---
-    p.add_argument("--fixed_h", type=int, default=320,
-                   help="Fixed image height for training and validation")
-    p.add_argument("--fixed_w", type=int, default=640,
-                   help="Fixed image width for training and validation")
-    p.add_argument("--min_size", type=int, default=256,
-                   help="Min short side for multi-scale training")
-    p.add_argument("--max_size_train", type=int, default=384,
-                   help="Max short side for multi-scale training")
+    p.add_argument("--fixed_h", type=int, default=320)
+    p.add_argument("--fixed_w", type=int, default=640)
+    p.add_argument("--min_size", type=int, default=256)
+    p.add_argument("--max_size_train", type=int, default=384)
     p.add_argument("--val_size", type=int, default=384)
-    p.add_argument("--max_size", type=int, default=512,
-                   help="Max long side after resize")
+    p.add_argument("--max_size", type=int, default=512)
     p.add_argument("--color_jitter", type=float, default=0.4)
-    p.add_argument("--rotate_max_angle", type=float, default=10,
-                   help="Max rotation angle in degrees for training augmentation")
-    p.add_argument("--gaussian_blur_p", type=float, default=0.2,
-                   help="Probability of applying random Gaussian blur")
+    p.add_argument(
+        "--rotate_max_angle", type=float, default=10,
+        help="Max rotation angle for training augmentation"
+    )
+    p.add_argument(
+        "--gaussian_blur_p", type=float, default=0.2,
+        help="Probability of applying random Gaussian blur"
+    )
 
     # --- ISO Noise Augmentation ---
-    p.add_argument("--aug_iso_noise", action="store_true", default=False,
-                   help="Enable ISO noise augmentation")
-    p.add_argument("--aug_iso_noise_p", type=float, default=0.2,
-                   help="Probability of applying ISO noise")
-    p.add_argument("--aug_iso_noise_intensity", type=float, default=0.05,
-                   help="Intensity of ISO noise (std of Gaussian noise)")
+    p.add_argument("--aug_iso_noise", action="store_true", default=False)
+    p.add_argument("--aug_iso_noise_p", type=float, default=0.2)
+    p.add_argument("--aug_iso_noise_intensity", type=float, default=0.05)
 
     # --- Translation Augmentation ---
-    p.add_argument("--aug_translation", action="store_true", default=False,
-                   help="Enable random translation augmentation")
-    p.add_argument("--aug_translation_p", type=float, default=0.3,
-                   help="Probability of applying translation")
-    p.add_argument("--aug_translation_max_shift", type=float, default=0.1,
-                   help="Max shift as fraction of image size")
-    p.add_argument("--aug_translation_min_area_ratio", type=float, default=0.25,
-                   help="Drop bbox if remaining area < ratio * original")
+    p.add_argument("--aug_translation", action="store_true", default=False)
+    p.add_argument("--aug_translation_p", type=float, default=0.3)
+    p.add_argument("--aug_translation_max_shift", type=float, default=0.1)
+    p.add_argument(
+        "--aug_translation_min_area_ratio", type=float, default=0.25,
+        help="Drop bbox if remaining area < ratio * original"
+    )
 
     # --- Expand (Zoom-out) Augmentation ---
-    p.add_argument("--aug_expand", action="store_true", default=False,
-                   help="Enable random expand (zoom-out) augmentation")
-    p.add_argument("--aug_expand_p", type=float, default=0.3,
-                   help="Probability of applying expand")
-    p.add_argument("--aug_expand_max_ratio", type=float, default=0.8,
-                   help="Max expand ratio (canvas = img_size * (1 + ratio))")
+    p.add_argument("--aug_expand", action="store_true", default=False)
+    p.add_argument("--aug_expand_p", type=float, default=0.3)
+    p.add_argument(
+        "--aug_expand_max_ratio", type=float, default=0.8,
+        help="Max expand ratio"
+    )
 
     # --- Misc ---
     p.add_argument("--output_dir", default="./output")
     p.add_argument("--device", default="cuda")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--resume", default="", help="Path to checkpoint to resume")
-    p.add_argument("--load_weights", default="",
-                   help="Path to a trained model checkpoint to load weights only "
-                        "(ignores optimizer/epoch, for fine-tuning)")
+    p.add_argument(
+        "--load_weights", default="",
+        help="Path to trained model weights only for fine-tuning"
+    )
     p.add_argument("--eval_only", action="store_true")
     p.add_argument("--eval_freq", type=int, default=1)
     p.add_argument("--print_freq", type=int, default=50)
-    p.add_argument("--wandb", action="store_true", default=False,
-                   help="Enable Weights & Biases logging")
+    p.add_argument("--wandb", action="store_true", default=False)
     p.add_argument("--wandb_project", default="DeformDETR-Digit-Detection")
     p.add_argument("--wandb_run_name", default=None)
 
@@ -201,12 +210,16 @@ def main():
 
     # ---------- Optimizer ----------
     param_dicts = [
-        {"params": [p for n, p in model.named_parameters()
-                     if "backbone" not in n and p.requires_grad],
-         "lr": args.lr, "initial_lr": args.lr},
-        {"params": [p for n, p in model.named_parameters()
-                     if "backbone" in n and p.requires_grad],
-         "lr": args.lr_backbone, "initial_lr": args.lr_backbone},
+        {
+            "params": [p for n, p in model.named_parameters()
+                       if "backbone" not in n and p.requires_grad],
+            "lr": args.lr, "initial_lr": args.lr
+        },
+        {
+            "params": [p for n, p in model.named_parameters()
+                       if "backbone" in n and p.requires_grad],
+            "lr": args.lr_backbone, "initial_lr": args.lr_backbone
+        },
     ]
     optimizer = torch.optim.AdamW(
         param_dicts, lr=args.lr, weight_decay=args.weight_decay,
@@ -218,14 +231,16 @@ def main():
 
     # ---------- Load pretrained weights (model only) ----------
     if args.load_weights:
-        ckpt = torch.load(args.load_weights, map_location=device, weights_only=False)
+        ckpt = torch.load(
+            args.load_weights, map_location=device, weights_only=False
+        )
         state = ckpt["model"] if "model" in ckpt else ckpt
-        # Only load matching keys (strict=False tolerates minor mismatches)
+        # Only load matching keys
         missing, unexpected = model.load_state_dict(state, strict=False)
         if missing:
             print(f"Warning: missing keys ({len(missing)}): {missing[:5]}...")
         if unexpected:
-            print(f"Warning: unexpected keys ({len(unexpected)}): {unexpected[:5]}...")
+            print(f"Warning: unexpected keys: {unexpected[:5]}...")
         print(f"Loaded model weights from {args.load_weights}")
 
     # ---------- Resume ----------
@@ -267,7 +282,10 @@ def main():
 
         elapsed = time.time() - t0
         lr_now = optimizer.param_groups[0]["lr"]
-        lr_bb = optimizer.param_groups[1]["lr"] if len(optimizer.param_groups) > 1 else lr_now
+        if len(optimizer.param_groups) > 1:
+            lr_bb = optimizer.param_groups[1]["lr"]
+        else:
+            lr_bb = lr_now
         print(
             f"Epoch [{epoch+1}/{args.epochs}]  loss={avg_loss:.4f}  "
             f"lr={lr_now:.2e}  time={elapsed:.0f}s"

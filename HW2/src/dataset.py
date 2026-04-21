@@ -11,9 +11,12 @@ import torchvision.transforms.functional as TF
 from PIL import Image
 
 
-def box_xyxy_to_cxcywh(boxes): # for DERT targets, convert (x1, y1, x2, y2) to (cx, cy, w, h)
+def box_xyxy_to_cxcywh(boxes):
+    # Convert (x1, y1, x2, y2) to (cx, cy, w, h)
     x1, y1, x2, y2 = boxes.unbind(-1)
-    return torch.stack([(x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1], dim=-1)
+    return torch.stack(
+        [(x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1], dim=-1
+    )
 
 
 class CocoDetection(data.Dataset):
@@ -42,12 +45,17 @@ class CocoDetection(data.Dataset):
         for ann in anns:
             x, y, w, h = ann["bbox"]
             boxes.append([x, y, x + w, y + h])
-            labels.append(ann["category_id"] - 1)  # 1-10 -> 0-9
+            # Map category_id from 1-10 to 0-9
+            labels.append(ann["category_id"] - 1)
         target = {
-            "boxes": torch.as_tensor(boxes, dtype=torch.float32).reshape(-1, 4),
+            "boxes": torch.as_tensor(
+                boxes, dtype=torch.float32
+            ).reshape(-1, 4),
             "labels": torch.as_tensor(labels, dtype=torch.int64),
             "image_id": img_info["id"],
-            "orig_size": torch.tensor([img_info["height"], img_info["width"]]),
+            "orig_size": torch.tensor(
+                [img_info["height"], img_info["width"]]
+            ),
         }
         if self.transforms is not None:
             img, target = self.transforms(img, target)
@@ -115,7 +123,8 @@ def _crop(image, target, region):
         )
         boxes[:, 0::2].clamp_(min=0, max=w)
         boxes[:, 1::2].clamp_(min=0, max=h)
-        keep = (boxes[:, 2] > boxes[:, 0] + 1) & (boxes[:, 3] > boxes[:, 1] + 1)
+        keep = (boxes[:, 2] > boxes[:, 0] + 1) & \
+               (boxes[:, 3] > boxes[:, 1] + 1)
         target["boxes"] = boxes[keep]
         target["labels"] = target["labels"][keep]
     target["size"] = torch.tensor([h, w])
@@ -128,7 +137,8 @@ def _hflip(image, target):
     if "boxes" in target and len(target["boxes"]):
         boxes = target["boxes"]
         target["boxes"] = torch.stack(
-            [w - boxes[:, 2], boxes[:, 1], w - boxes[:, 0], boxes[:, 3]], dim=-1
+            [w - boxes[:, 2], boxes[:, 1], w - boxes[:, 0], boxes[:, 3]],
+            dim=-1
         )
     return image, target
 
@@ -159,7 +169,11 @@ class RandomHorizontalFlip:
 
 class RandomResize:
     def __init__(self, sizes, max_size=None):
-        self.sizes = list(sizes) if not isinstance(sizes, (list, tuple)) else sizes
+        self.sizes = (
+            list(sizes)
+            if not isinstance(sizes, (list, tuple))
+            else sizes
+        )
         self.max_size = max_size
 
     def __call__(self, img, target):
@@ -173,16 +187,25 @@ class RandomSizeCrop:
         self.max_size = max_size
 
     def __call__(self, img, target):
-        w = random.randint(self.min_size, min(img.width, self.max_size))
-        h = random.randint(self.min_size, min(img.height, self.max_size))
+        w = random.randint(
+            self.min_size, min(img.width, self.max_size)
+        )
+        h = random.randint(
+            self.min_size, min(img.height, self.max_size)
+        )
         region = T.RandomCrop.get_params(img, (h, w))
         return _crop(img, target, region)
 
 
 class RandomResizedCropFixed:
-    """Resize to slightly larger than target, then random crop to exact (H, W)."""
+    """Resize to slightly larger than target.
 
-    def __init__(self, target_h, target_w, scale_min=0.9, scale_max=1.0):
+    Then random crop to exact (H, W).
+    """
+
+    def __init__(
+        self, target_h, target_w, scale_min=0.9, scale_max=1.0
+    ):
         self.target_h = target_h
         self.target_w = target_w
         self.scale_min = scale_min
@@ -190,19 +213,25 @@ class RandomResizedCropFixed:
 
     def __call__(self, img, target):
         w, h = img.size
-        # Compute scale so that after resize the image covers target_h x target_w
+        # Compute scale so that after resize the image covers target_h x
+        # target_w
         scale_h = self.target_h / h
         scale_w = self.target_w / w
         base_scale = max(scale_h, scale_w)
-        # Random extra zoom in [1/scale_max, 1/scale_min] to simulate crop range
-        extra = random.uniform(1.0 / self.scale_max, 1.0 / self.scale_min)
+        # Random extra zoom in [1/scale_max, 1/scale_min] to simulate
+        # crop range
+        extra = random.uniform(
+            1.0 / self.scale_max, 1.0 / self.scale_min
+        )
         scale = base_scale * extra
         new_w = int(round(w * scale))
         new_h = int(round(h * scale))
         # Ensure at least target size
         new_w = max(new_w, self.target_w)
         new_h = max(new_h, self.target_h)
-        img, target = _resize(img, target, min(new_h, new_w), max_size=None)
+        img, target = _resize(
+            img, target, min(new_h, new_w), max_size=None
+        )
         # Force exact size via resize if aspect changed
         cur_w, cur_h = img.size
         if cur_w < self.target_w or cur_h < self.target_h:
@@ -213,17 +242,22 @@ class RandomResizedCropFixed:
                 rw = new_w2 / cur_w
                 rh = new_h2 / cur_h
                 target["boxes"] = target["boxes"] * torch.as_tensor(
-                    [rw, rh, rw, rh]
+                    [rw, rh, rw, rh], dtype=torch.float32
                 )
             cur_w, cur_h = new_w2, new_h2
         # Random crop to exact target size
         top = random.randint(0, max(cur_h - self.target_h, 0))
         left = random.randint(0, max(cur_w - self.target_w, 0))
-        return _crop(img, target, (top, left, self.target_h, self.target_w))
+        return _crop(
+            img, target, (top, left, self.target_h, self.target_w)
+        )
 
 
 class RandomSelect:
-    """Randomly selects between two transforms with probability p."""
+    """Randomly selects between two transforms.
+
+    Selects between two transforms with probability p.
+    """
 
     def __init__(self, transforms1, transforms2, p=0.5):
         self.transforms1 = transforms1
@@ -306,12 +340,18 @@ class RandomTranslation:
 
         w, h = img.size
         # Random shift in pixels
-        shift_x = int(random.uniform(-self.max_shift, self.max_shift) * w)
-        shift_y = int(random.uniform(-self.max_shift, self.max_shift) * h)
+        shift_x = int(
+            random.uniform(-self.max_shift, self.max_shift) * w
+        )
+        shift_y = int(
+            random.uniform(-self.max_shift, self.max_shift) * h
+        )
 
         # Translate image using affine transform
-        img = TF.affine(img, angle=0, translate=(shift_x, shift_y),
-                        scale=1.0, shear=0, fill=0)
+        img = TF.affine(
+            img, angle=0, translate=(shift_x, shift_y),
+            scale=1.0, shear=0, fill=0
+        )
 
         if "boxes" not in target or len(target["boxes"]) == 0:
             return img, target
@@ -337,10 +377,13 @@ class RandomTranslation:
         # Calculate new areas
         new_areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
 
-        # Keep boxes that have sufficient remaining area and are not degenerate
-        keep = (new_areas >= self.min_area_ratio * orig_areas) & \
-               (boxes[:, 2] > boxes[:, 0] + 1) & \
-               (boxes[:, 3] > boxes[:, 1] + 1)
+        # Keep boxes that have sufficient remaining area and are not
+        # degenerate
+        keep = (
+            (new_areas >= self.min_area_ratio * orig_areas)
+            & (boxes[:, 2] > boxes[:, 0] + 1)
+            & (boxes[:, 3] > boxes[:, 1] + 1)
+        )
 
         target["boxes"] = boxes[keep]
         target["labels"] = labels[keep]
@@ -349,15 +392,15 @@ class RandomTranslation:
 
 
 class RandomExpand:
-    """Randomly expand (zoom-out) the image by placing it on a larger canvas.
+    """Randomly expand (zoom-out) the image.
 
-    The canvas is filled with the ImageNet mean pixel value. Bounding boxes
-    are shifted accordingly. This effectively simulates objects appearing
-    smaller with more surrounding context.
+    Places it on a larger canvas filled with ImageNet mean pixel value.
+    Bounding boxes are shifted accordingly. This effectively simulates
+    objects appearing smaller with more surrounding context.
 
     Args:
         p: probability of applying the expand.
-        max_ratio: maximum expansion ratio.  The canvas side length is
+        max_ratio: maximum expansion ratio. Canvas side length is
             ``original_side * uniform(1, 1 + max_ratio)``.
     """
 
@@ -388,9 +431,9 @@ class RandomExpand:
         if "boxes" in target and len(target["boxes"]):
             boxes = target["boxes"].clone()
             boxes[:, 0] += left  # x1
-            boxes[:, 1] += top   # y1
+            boxes[:, 1] += top  # y1
             boxes[:, 2] += left  # x2
-            boxes[:, 3] += top   # y2
+            boxes[:, 3] += top  # y2
             target["boxes"] = boxes
 
         target["size"] = torch.tensor([new_h, new_w])
@@ -414,24 +457,37 @@ class RandomRotation:
         # Rotate box corners and take axis-aligned bounding box
         import math
         cx_img, cy_img = w / 2.0, h / 2.0
-        rad = math.radians(-angle)  # PIL rotates counter-clockwise
+        # PIL rotates counter-clockwise
+        rad = math.radians(-angle)
         cos_a, sin_a = math.cos(rad), math.sin(rad)
         boxes = target["boxes"]
-        x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
+        x1 = boxes[:, 0]
+        y1 = boxes[:, 1]
+        x2 = boxes[:, 2]
+        y2 = boxes[:, 3]
         # 4 corners per box
         corners_x = torch.stack([x1, x2, x2, x1], dim=1)  # (N, 4)
         corners_y = torch.stack([y1, y1, y2, y2], dim=1)  # (N, 4)
         # Translate to origin, rotate, translate back
-        rx = cos_a * (corners_x - cx_img) - sin_a * (corners_y - cy_img) + cx_img
-        ry = sin_a * (corners_x - cx_img) + cos_a * (corners_y - cy_img) + cy_img
+        rx = (
+            cos_a * (corners_x - cx_img)
+            - sin_a * (corners_y - cy_img)
+            + cx_img
+        )
+        ry = (
+            sin_a * (corners_x - cx_img)
+            + cos_a * (corners_y - cy_img)
+            + cy_img
+        )
         new_x1 = rx.min(dim=1).values.clamp(min=0, max=w)
         new_y1 = ry.min(dim=1).values.clamp(min=0, max=h)
         new_x2 = rx.max(dim=1).values.clamp(min=0, max=w)
         new_y2 = ry.max(dim=1).values.clamp(min=0, max=h)
         new_boxes = torch.stack([new_x1, new_y1, new_x2, new_y2], dim=1)
         # Filter degenerate
-        keep = (new_boxes[:, 2] > new_boxes[:, 0] + 1) & (
-            new_boxes[:, 3] > new_boxes[:, 1] + 1
+        keep = (
+            (new_boxes[:, 2] > new_boxes[:, 0] + 1)
+            & (new_boxes[:, 3] > new_boxes[:, 1] + 1)
         )
         target["boxes"] = new_boxes[keep]
         target["labels"] = target["labels"][keep]
@@ -453,7 +509,9 @@ class Normalize:
         h, w = img.shape[-2:]
         if "boxes" in target and len(target["boxes"]):
             boxes = box_xyxy_to_cxcywh(target["boxes"])
-            boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
+            boxes = boxes / torch.tensor(
+                [w, h, w, h], dtype=torch.float32
+            )
             target["boxes"] = boxes
         target["size"] = torch.tensor([h, w])
         return img, target
@@ -471,7 +529,7 @@ def _resize_fixed(image, target, target_h, target_w):
         ratio_w = target_w / w
         ratio_h = target_h / h
         target["boxes"] = target["boxes"] * torch.as_tensor(
-            [ratio_w, ratio_h, ratio_w, ratio_h]
+            [ratio_w, ratio_h, ratio_w, ratio_h], dtype=torch.float32
         )
     target["size"] = torch.tensor([target_h, target_w])
     return image, target
@@ -498,10 +556,14 @@ def make_transforms(split, args):
 
     if split == "train":
         transforms_list = [
-            ColorJitter(args.color_jitter, args.color_jitter,
-                        args.color_jitter, args.color_jitter * 0.25),
+            ColorJitter(
+                args.color_jitter, args.color_jitter,
+                args.color_jitter, args.color_jitter * 0.25
+            ),
             RandomGrayscale(p=0.05),
-            RandomGaussianBlur(p=getattr(args, 'gaussian_blur_p', 0.0)),
+            RandomGaussianBlur(
+                p=getattr(args, 'gaussian_blur_p', 0.0)
+            ),
         ]
 
         # ISO Noise augmentation
@@ -509,17 +571,24 @@ def make_transforms(split, args):
             transforms_list.append(
                 RandomISOSNoise(
                     p=getattr(args, 'aug_iso_noise_p', 0.2),
-                    intensity=getattr(args, 'aug_iso_noise_intensity', 0.05),
+                    intensity=getattr(
+                        args, 'aug_iso_noise_intensity', 0.05
+                    ),
                 )
             )
 
-        # Random translation augmentation (before crop to allow more variation)
+        # Random translation augmentation (before crop to allow more
+        # variation)
         if getattr(args, 'aug_translation', False):
             transforms_list.append(
                 RandomTranslation(
                     p=getattr(args, 'aug_translation_p', 0.3),
-                    max_shift=getattr(args, 'aug_translation_max_shift', 0.1),
-                    min_area_ratio=getattr(args, 'aug_translation_min_area_ratio', 0.25),
+                    max_shift=getattr(
+                        args, 'aug_translation_max_shift', 0.1
+                    ),
+                    min_area_ratio=getattr(
+                        args, 'aug_translation_min_area_ratio', 0.25
+                    ),
                 )
             )
 
@@ -528,13 +597,17 @@ def make_transforms(split, args):
             transforms_list.append(
                 RandomExpand(
                     p=getattr(args, 'aug_expand_p', 0.3),
-                    max_ratio=getattr(args, 'aug_expand_max_ratio', 0.2),
+                    max_ratio=getattr(
+                        args, 'aug_expand_max_ratio', 0.2
+                    ),
                 )
             )
 
         transforms_list.extend([
-            RandomResizedCropFixed(target_h, target_w,
-                                   scale_min=0.9, scale_max=1.0),
+            RandomResizedCropFixed(
+                target_h, target_w,
+                scale_min=0.9, scale_max=1.0
+            ),
             normalize,
         ])
         return Compose(transforms_list)
