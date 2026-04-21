@@ -6,9 +6,9 @@
 Uses **ResNet-50** backbone (pretrained on ImageNet) with **multi-scale deformable
 attention** — a pure PyTorch implementation (no custom CUDA ops required).
 
-### Key differences from standard DETR (`../src`)
+### Key differences from standard DETR
 
-| Feature | DETR (src) | Deformable DETR (src2) |
+| Feature | DETR  | Deformable DETR (src) |
 |---|---|---|
 | Backbone features | Single-scale (stride 32) | Multi-scale (strides 8, 16, 32, 64) |
 | Attention | Dense global attention | Sparse deformable attention |
@@ -28,7 +28,7 @@ pip install -r requirements.txt
 ### Training
 
 ```bash
-cd src2
+cd src
 
 # Basic training
 python train.py \

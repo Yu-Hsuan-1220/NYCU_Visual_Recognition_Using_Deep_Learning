@@ -88,6 +88,8 @@ heightrounded, % to avoid spurious underfull messages
 
 \section{Introduction}
 
+Github link: \url{https://github.com/Yu-Hsuan-1220/NYCU_Visual_Recognition_Using_Deep_Learning/tree/main/HW2}
+
 The objective of this Lab is to develop a robust digit detection system capable of identifying and localizing numbers (0-9) in various image environments using DETR with ResNet50 backbone. The primary metric for success is the $mAP@[.5:.95]$, which requires the model to not only find the digits (Recall) but also to provide highly accurate bounding box predictions (Precision).
 
 Our core methodology integrates the efficient local attention mechanisms of Deformable DETR with a Two-stage query initialization technique to address the inherent challenges of detecting small-scale digits within complex, noisy backgrounds. By employing multi-scale feature sampling, the model achieves heightened sensitivity to fine-grained edge details, while the two-stage mechanism provides the decoder with precise spatial priors for more stable target localization. The optimization process follows a coarse-to-fine strategy, where heavy data augmentation is initially utilized to establish robustness against environmental artifacts, followed by a refinement phase that removes these augmentations and increases the coefficients for bounding box regression losses. This strategic transition compels the model to shift from generalized regional identification to pixel-level boundary alignment, successfully bridging the performance gap between robust classification and high-precision localization. Many code implementations are inspired by the official Deformable DETR codebase \cite{Deformable_DETR_github_ref}.

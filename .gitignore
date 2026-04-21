@@ -16,3 +16,4 @@ __pycache__/
 *.gz
 *.bcf
 *.zip
+submission/
