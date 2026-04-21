@@ -1,8 +1,7 @@
-"""Generate pred.json predictions on test images for submission (Deformable DETR)."""
+"""Inference script for Deformable DETR digit detection."""
 
 import argparse
 import json
-import os
 import types
 
 import torch
@@ -11,13 +10,15 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from criterion import box_cxcywh_to_xyxy
-from dataset import TestDataset, collate_fn, make_transforms
+from dataset import TestDataset, collate_fn
 from model import DeformableDETR
 
 
 def get_args():
-    p = argparse.ArgumentParser("Deformable DETR Digit Detection Inference")
-    p.add_argument("--checkpoint", required=True, help="Path to model checkpoint")
+    p = argparse.ArgumentParser(
+        description="Deformable DETR Digit Detection Inference"
+    )
+    p.add_argument("--checkpoint", required=True, help="Model checkpoint path")
     p.add_argument("--test_img_dir", default="../dataset/test")
     p.add_argument("--output_file", default="pred.json")
     p.add_argument("--score_threshold", type=float, default=0.01)
@@ -54,11 +55,10 @@ def build_model_from_checkpoint(ckpt, device):
         num_feature_levels=saved.get("num_feature_levels", 4),
         enc_n_points=saved.get("enc_n_points", 4),
         dec_n_points=saved.get("dec_n_points", 4),
-        aux_loss=False,  # not needed for inference
+        aux_loss=False,
         with_box_refine=saved.get("with_box_refine", False),
-        pretrained_backbone=False,  # will load weights from checkpoint
+        pretrained_backbone=False,
     )
-    # Load weights (prefer EMA if available)
     if "ema" in ckpt:
         model.load_state_dict(ckpt["ema"])
         print("Loaded EMA weights")
@@ -131,20 +131,14 @@ def _apply_per_class_nms(boxes_xyxy, scores, labels, iou_thresh):
 def run_inference(model, data_loader, device, score_thresh, num_classes,
                   focal_loss=False, tta=False, nms_iou=0.5):
     results = []
-
     for images, masks, targets in tqdm(data_loader, desc="Inference"):
-        images = images.to(device)
-        masks = masks.to(device)
-
+        images, masks = images.to(device), masks.to(device)
         outputs = model(images, masks)
-
         all_logits = [outputs["pred_logits"]]
         all_boxes = [outputs["pred_boxes"]]
 
         if tta:
-            flip_images = torch.flip(images, [-1])
-            flip_masks = torch.flip(masks, [-1])
-            flip_out = model(flip_images, flip_masks)
+            flip_out = model(torch.flip(images, [-1]), torch.flip(masks, [-1]))
             flip_boxes = flip_out["pred_boxes"].clone()
             flip_boxes[..., 0] = 1 - flip_boxes[..., 0]
             all_logits.append(flip_out["pred_logits"])
@@ -156,16 +150,13 @@ def run_inference(model, data_loader, device, score_thresh, num_classes,
         for idx in range(len(targets)):
             img_id = int(targets[idx]["image_id"])
             orig_h, orig_w = targets[idx]["orig_size"].tolist()
-
             decoded = _decode_single_image(
                 pred_logits[idx], pred_boxes[idx],
                 orig_h, orig_w, score_thresh, focal_loss,
             )
             if decoded is None:
                 continue
-
             boxes_xywh, scores, labels = decoded
-
             if tta:
                 boxes_xyxy_nms = boxes_xywh.clone()
                 boxes_xyxy_nms[:, 2] += boxes_xyxy_nms[:, 0]
@@ -173,9 +164,8 @@ def run_inference(model, data_loader, device, score_thresh, num_classes,
                 keep = _apply_per_class_nms(
                     boxes_xyxy_nms, scores, labels, nms_iou,
                 )
-                boxes_xywh = boxes_xywh[keep]
-                scores = scores[keep]
-                labels = labels[keep]
+                boxes_xywh, scores, labels = \
+                    boxes_xywh[keep], scores[keep], labels[keep]
 
             for j in range(len(scores)):
                 results.append({
@@ -184,54 +174,42 @@ def run_inference(model, data_loader, device, score_thresh, num_classes,
                     "bbox": [round(v, 2) for v in boxes_xywh[j].tolist()],
                     "score": round(scores[j].item(), 6),
                 })
-
     return results
 
 
 def main():
     args = get_args()
     device = torch.device(args.device)
-
     ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
     saved_args = ckpt.get("args", {})
     num_classes = saved_args.get("num_classes", 10)
     focal_loss = saved_args.get("focal_loss", False)
-    print(f"Checkpoint epoch: {ckpt.get('epoch', '?')}, "
-          f"best_map: {ckpt.get('best_map', '?')}")
 
     if "val_size" in saved_args:
         args.val_size = saved_args["val_size"]
     if "max_size" in saved_args:
         args.max_size = saved_args["max_size"]
-    print(f"Using val_size={args.val_size}, max_size={args.max_size}")
 
-    if args.use_ema and "ema" not in ckpt:
-        print("Note: EMA weights not found, using model weights")
     model = build_model_from_checkpoint(ckpt, device)
-
     transforms = make_test_transforms(args)
     test_ds = TestDataset(args.test_img_dir, transforms=transforms)
     test_loader = DataLoader(
         test_ds, batch_size=args.batch_size, shuffle=False,
         num_workers=args.num_workers, collate_fn=collate_fn, pin_memory=True,
     )
-    print(f"Test images: {len(test_ds)}")
 
     results = run_inference(
         model, test_loader, device, args.score_threshold,
         num_classes, focal_loss, tta=args.tta, nms_iou=args.nms_iou,
     )
-    print(f"Total predictions: {len(results)}")
 
     with open(args.output_file, "w") as f:
         json.dump(results, f)
-    print(f"Saved to {args.output_file}")
 
     import zipfile
     zip_name = args.output_file.replace(".json", ".zip")
     with zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(args.output_file, "pred.json")
-    print(f"Submission zip: {zip_name}")
 
 
 if __name__ == "__main__":

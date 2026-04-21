@@ -13,13 +13,19 @@ def analyze(ann_file, label):
     areas = [w * h for w, h in zip(widths, heights)]
 
     print(f"\n=== {label} ({len(widths)} boxes) ===")
-    for name, vals in [("Width", widths), ("Height", heights), ("Area", areas)]:
+    for name, vals in [
+        ("Width", widths),
+        ("Height", heights),
+        ("Area", areas)
+    ]:
         v = np.array(vals)
         print(f"  {name:6s}: min={v.min():.1f}  max={v.max():.1f}  "
-              f"mean={v.mean():.1f}  median={np.median(v):.1f}  std={v.std():.1f}")
+              f"mean={v.mean():.1f}  median={np.median(v):.1f}  "
+              f"std={v.std():.1f}")
         pcts = np.percentile(v, [10, 25, 50, 75, 90])
-        print(f"          percentiles [10,25,50,75,90]: "
-              f"{pcts[0]:.1f}, {pcts[1]:.1f}, {pcts[2]:.1f}, {pcts[3]:.1f}, {pcts[4]:.1f}")
+        print(f"        percentiles [10,25,50,75,90]: "
+              f"{pcts[0]:.1f}, {pcts[1]:.1f}, {pcts[2]:.1f}, "
+              f"{pcts[3]:.1f}, {pcts[4]:.1f}")
 
     # Size buckets
     areas = np.array(areas)
@@ -27,7 +33,8 @@ def analyze(ann_file, label):
     medium = ((areas >= 32**2) & (areas < 96**2)).sum()
     large = (areas >= 96**2).sum()
     total = len(areas)
-    print(f"  COCO size split:  small(<32²)={small} ({100*small/total:.1f}%)  "
+    print(f"  COCO size split:  "
+          f"small(<32²)={small} ({100*small/total:.1f}%)  "
           f"medium(32²-96²)={medium} ({100*medium/total:.1f}%)  "
           f"large(>96²)={large} ({100*large/total:.1f}%)")
 
@@ -43,10 +50,16 @@ def main():
 
     # Compare
     print("\n=== Train vs Valid comparison ===")
-    for name, t, v in [("Width", tw, vw), ("Height", th, vh), ("Area", ta, va)]:
+    # Split the long list to fit PEP 8
+    compare_list = [
+        ("Width", tw, vw), ("Height", th, vh), ("Area", ta, va)
+    ]
+    for name, t, v in compare_list:
         t, v = np.array(t), np.array(v)
-        print(f"  {name:6s}: train_mean={t.mean():.1f} vs valid_mean={v.mean():.1f}  "
-              f"train_median={np.median(t):.1f} vs valid_median={np.median(v):.1f}")
+        print(f"  {name:6s}: train_mean={t.mean():.1f} vs "
+              f"valid_mean={v.mean():.1f}  "
+              f"train_median={np.median(t):.1f} vs "
+              f"valid_median={np.median(v):.1f}")
 
 
 if __name__ == "__main__":

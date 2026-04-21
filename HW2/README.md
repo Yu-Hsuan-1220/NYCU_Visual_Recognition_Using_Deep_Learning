@@ -53,38 +53,38 @@ HW2/
 ```bash
 cd NYCU_Visual_Recognition_Using_Deep_Learning/HW2/src
 
-python train.py / 
---aux_loss /
---output_dir ./output_phase1/
---wandb /
---amp /
---with_box_refine /
---freeze_at 0 /
---num_feature_levels 3 /
---lr 1e-4 /
---lr_backbone 1e-5 /
---aug_iso_noise /
---aug_translation /
+python train.py \
+--aux_loss \
+--output_dir ./output_phase1 \
+--wandb \
+--amp \
+--with_box_refine \
+--freeze_at 0 \
+--num_feature_levels 3 \
+--lr 1e-4 \
+--lr_backbone 1e-5 \
+--aug_iso_noise \
+--aug_translation \
 --aug_expand
 
 # Stop phase1 training when reaching 14 epochs, then start phase2 training with the following command:
 
-python train.py /
---aux_loss /
---output_dir ./output_phase2/
---wandb /
---amp /
---with_box_refine /
---freeze_at 2 /
---num_feature_levels 3 /
---lr 5e-6 /
---lr_backbone 5e-7 /
---warmup_epochs 0 /
---load_weights ./output_phase1/best.pth /
---cost_bbox 8.0 /
---cost_giou 5.0 /
---loss_bbox_coef 8.0 /
---loss_giou_coef 5.0 /
+python train.py \
+--aux_loss \
+--output_dir ./output_phase2 \
+--wandb \
+--amp \
+--with_box_refine \
+--freeze_at 2 \
+--num_feature_levels 3 \
+--lr 5e-6 \
+--lr_backbone 5e-7 \
+--warmup_epochs 0 \
+--load_weights ./output_phase1/best.pth \
+--cost_bbox 8.0 \
+--cost_giou 5.0 \
+--loss_bbox_coef 8.0 \
+--loss_giou_coef 5.0 \
 --weight_decay 1e-3
 
 ```

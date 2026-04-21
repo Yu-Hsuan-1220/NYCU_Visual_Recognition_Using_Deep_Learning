@@ -12,7 +12,9 @@ from scipy.optimize import linear_sum_assignment
 
 def box_cxcywh_to_xyxy(boxes):
     cx, cy, w, h = boxes.unbind(-1)
-    return torch.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], dim=-1)
+    return torch.stack(
+        [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], dim=-1
+    )
 
 
 def box_iou(boxes1, boxes2):
@@ -111,7 +113,8 @@ class HungarianMatcher(nn.Module):
 
         sizes = [len(t["labels"]) for t in targets]
         indices = [
-            linear_sum_assignment(c[i]) for i, c in enumerate(C.split(sizes, -1))
+            linear_sum_assignment(c[i])
+            for i, c in enumerate(C.split(sizes, -1))
         ]
         return [
             (torch.as_tensor(i, dtype=torch.int64),
@@ -152,14 +155,13 @@ class SetCriterion(nn.Module):
         return batch_idx, src_idx
 
     def loss_labels(self, outputs, targets, indices, num_boxes):
-        src_logits = outputs["pred_logits"]  # (B, Q, C+1) or (B, Q, C)
+        src_logits = outputs["pred_logits"]
         idx = self._get_src_permutation_idx(indices)
         target_classes_o = torch.cat(
             [t["labels"][j] for t, (_, j) in zip(targets, indices)]
         )
 
         if self.focal_loss:
-            # Sigmoid focal loss
             target_onehot = torch.zeros(
                 src_logits.shape, dtype=src_logits.dtype,
                 device=src_logits.device,
@@ -200,7 +202,6 @@ class SetCriterion(nn.Module):
         }
 
     def forward(self, outputs, targets):
-        # Filter out auxiliary outputs for matching
         out_no_aux = {k: v for k, v in outputs.items() if k != "aux_outputs"}
         indices = self.matcher(out_no_aux, targets)
 
@@ -210,13 +211,18 @@ class SetCriterion(nn.Module):
         losses.update(self.loss_labels(outputs, targets, indices, num_boxes))
         losses.update(self.loss_boxes(outputs, targets, indices, num_boxes))
 
-        # Auxiliary losses (from intermediate decoder layers)
         if "aux_outputs" in outputs:
             for i, aux in enumerate(outputs["aux_outputs"]):
                 aux_indices = self.matcher(aux, targets)
-                l = self.loss_labels(aux, targets, aux_indices, num_boxes)
-                l.update(self.loss_boxes(aux, targets, aux_indices, num_boxes))
-                losses.update({k + f"_{i}": v for k, v in l.items()})
+                aux_loss_dict = self.loss_labels(
+                    aux, targets, aux_indices, num_boxes
+                )
+                aux_loss_dict.update(
+                    self.loss_boxes(aux, targets, aux_indices, num_boxes)
+                )
+                losses.update({
+                    k + f"_{i}": v for k, v in aux_loss_dict.items()
+                })
 
         return losses
 
@@ -236,7 +242,6 @@ def build_criterion(args):
         "loss_bbox": args.loss_bbox_coef,
         "loss_giou": args.loss_giou_coef,
     }
-    # Auxiliary loss weights for intermediate decoder layers
     if args.aux_loss:
         aux_weight_dict = {}
         for i in range(args.num_decoder_layers - 1):
