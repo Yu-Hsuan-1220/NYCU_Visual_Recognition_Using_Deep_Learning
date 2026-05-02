@@ -17,3 +17,4 @@ __pycache__/
 *.bcf
 *.zip
 submission/
+*.tif
