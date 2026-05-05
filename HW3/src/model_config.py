@@ -6,6 +6,13 @@ All hyperparameters are exposed via function arguments for argparse integration.
 """
 
 
+def _bbox_loss_cfg(bbox_loss):
+    """Return loss_bbox dict for Shared2FCBBoxHead stages."""
+    if bbox_loss == "giou":
+        return dict(type="GIoULoss", loss_weight=2.0)
+    return dict(type="SmoothL1Loss", beta=1.0, loss_weight=1.0)
+
+
 def get_model_config(
     backbone_name="convnextv2_base",
     pretrained=True,
@@ -14,6 +21,9 @@ def get_model_config(
     drop_path_rate=0.4,
     cascade_iou_thresholds=(0.5, 0.6, 0.7),
     cascade_stage_weights=(1.0, 0.5, 0.25),
+    bbox_loss="smoothl1",
+    mask_head_convs=4,
+    mask_roi_size=14,
 ):
     """Build the model config dict for Cascade Mask R-CNN.
 
@@ -25,6 +35,9 @@ def get_model_config(
         drop_path_rate: Stochastic depth rate.
         cascade_iou_thresholds: IoU thresholds for cascade stages.
         cascade_stage_weights: Loss weights for cascade stages.
+        bbox_loss: Loss type for Cascade bbox heads — "smoothl1" or "giou".
+        mask_head_convs: Number of conv layers in FCNMaskHead (default 4).
+        mask_roi_size: RoIAlign output size for mask branch (default 14).
 
     Returns:
         dict: MMDetection model config.
@@ -106,7 +119,7 @@ def get_model_config(
                     loss_cls=dict(
                         type="CrossEntropyLoss", use_sigmoid=False, loss_weight=1.0
                     ),
-                    loss_bbox=dict(type="SmoothL1Loss", beta=1.0, loss_weight=1.0),
+                    loss_bbox=_bbox_loss_cfg(bbox_loss),
                 ),
                 dict(
                     type="Shared2FCBBoxHead",
@@ -123,7 +136,7 @@ def get_model_config(
                     loss_cls=dict(
                         type="CrossEntropyLoss", use_sigmoid=False, loss_weight=1.0
                     ),
-                    loss_bbox=dict(type="SmoothL1Loss", beta=1.0, loss_weight=1.0),
+                    loss_bbox=_bbox_loss_cfg(bbox_loss),
                 ),
                 dict(
                     type="Shared2FCBBoxHead",
@@ -140,18 +153,18 @@ def get_model_config(
                     loss_cls=dict(
                         type="CrossEntropyLoss", use_sigmoid=False, loss_weight=1.0
                     ),
-                    loss_bbox=dict(type="SmoothL1Loss", beta=1.0, loss_weight=1.0),
+                    loss_bbox=_bbox_loss_cfg(bbox_loss),
                 ),
             ],
             mask_roi_extractor=dict(
                 type="SingleRoIExtractor",
-                roi_layer=dict(type="RoIAlign", output_size=14, sampling_ratio=0),
+                roi_layer=dict(type="RoIAlign", output_size=mask_roi_size, sampling_ratio=0),
                 out_channels=fpn_out_channels,
                 featmap_strides=[4, 8, 16, 32],
             ),
             mask_head=dict(
                 type="FCNMaskHead",
-                num_convs=4,
+                num_convs=mask_head_convs,
                 in_channels=fpn_out_channels,
                 conv_out_channels=fpn_out_channels,
                 num_classes=num_classes,
@@ -203,7 +216,7 @@ def get_model_config(
                         neg_pos_ub=-1,
                         add_gt_as_proposals=True,
                     ),
-                    mask_size=28,
+                    mask_size=mask_roi_size * 2,  # FCNMaskHead upsamples RoI by 2× via ConvTranspose
                     pos_weight=-1,
                     debug=False,
                 ),
@@ -223,7 +236,7 @@ def get_model_config(
                         neg_pos_ub=-1,
                         add_gt_as_proposals=True,
                     ),
-                    mask_size=28,
+                    mask_size=mask_roi_size * 2,
                     pos_weight=-1,
                     debug=False,
                 ),
@@ -243,7 +256,7 @@ def get_model_config(
                         neg_pos_ub=-1,
                         add_gt_as_proposals=True,
                     ),
-                    mask_size=28,
+                    mask_size=mask_roi_size * 2,
                     pos_weight=-1,
                     debug=False,
                 ),

@@ -47,6 +47,13 @@ def parse_args():
     parser.add_argument("--fpn_channels", type=int, default=256)
     parser.add_argument("--num_classes", type=int, default=4)
     parser.add_argument("--drop_path_rate", type=float, default=0.4)
+    parser.add_argument("--bbox_loss", type=str, default="smoothl1",
+                        choices=["smoothl1", "giou"],
+                        help="Must match training value")
+    parser.add_argument("--mask_head_convs", type=int, default=4,
+                        help="Must match training value")
+    parser.add_argument("--mask_roi_size", type=int, default=14,
+                        help="CRITICAL: must match training value for checkpoint compatibility")
 
     # Inference settings
     parser.add_argument("--img_scale", type=int, nargs=2, default=[1024, 1024],
@@ -61,6 +68,8 @@ def parse_args():
     # TTA
     parser.add_argument("--tta", action="store_true", default=False,
                         help="Enable test-time augmentation (H+V flip)")
+    parser.add_argument("--tta_rotation", action="store_true", default=False,
+                        help="Extend TTA with 90°CW + 90°CCW rotation views (requires --tta)")
 
     # Ensemble (only used when --checkpoints is set)
     parser.add_argument("--wbf_iou_threshold", type=float, default=0.55,
@@ -110,6 +119,9 @@ def build_model(args, checkpoint_path=None, score_threshold=None):
         fpn_out_channels=args.fpn_channels,
         num_classes=args.num_classes,
         drop_path_rate=args.drop_path_rate,
+        bbox_loss=args.bbox_loss,
+        mask_head_convs=args.mask_head_convs,
+        mask_roi_size=args.mask_roi_size,
     )
 
     # Update test_cfg thresholds
@@ -191,8 +203,15 @@ def flip_masks(masks, direction, h, w):
     return flipped
 
 
-def tta_inference(model, img, img_scale):
-    """Test-time augmentation: original + H-flip + V-flip, then merge."""
+def tta_inference(model, img, img_scale, tta_rotation=False):
+    """Test-time augmentation: original + H-flip + V-flip (+ optional 90°CW/CCW).
+
+    With tta_rotation=False (default): 3 views — backward-compatible.
+    With tta_rotation=True:            5 views — adds 90°CW and 90°CCW.
+
+    Each rotation entry is a tuple (tag, cv2_rotate_code, inv_k) where inv_k is
+    the k argument to np.rot90 that inverts the rotation.
+    """
     from mmdet.apis import inference_detector
 
     h, w = img.shape[:2]
@@ -201,14 +220,24 @@ def tta_inference(model, img, img_scale):
     all_scores = []
     all_masks = []
 
-    # Augmentation configs: (flip_direction, )
+    # Build augmentation list.  String entries are flip directions; tuple entries
+    # are rotation specs: ("rot", cv2_code, inv_k_for_np_rot90).
     tta_configs = [None, "horizontal", "vertical"]
+    if tta_rotation:
+        tta_configs += [
+            ("rot", cv2.ROTATE_90_CLOCKWISE, 1),         # invert with np.rot90(k=1) = CCW
+            ("rot", cv2.ROTATE_90_COUNTERCLOCKWISE, 3),  # invert with np.rot90(k=3) = CW
+        ]
 
-    for flip_dir in tta_configs:
-        if flip_dir is not None:
-            aug_img = flip_image(img, flip_dir)
-        else:
+    for aug in tta_configs:
+        # --- Apply augmentation ---
+        if aug is None:
             aug_img = img
+        elif isinstance(aug, str):
+            aug_img = flip_image(img, aug)
+        else:
+            _, cv2_code, _ = aug
+            aug_img = cv2.rotate(img, cv2_code)
 
         result = inference_detector(model, aug_img)
         pred = result.pred_instances
@@ -218,22 +247,60 @@ def tta_inference(model, img, img_scale):
         scores = pred.scores.cpu().numpy()
         masks = pred.masks.cpu().numpy()
 
-        # Flip bboxes back
-        if flip_dir == "horizontal":
-            # img width used by model might differ due to resize
-            mask_h, mask_w = masks.shape[1], masks.shape[2] if len(masks) > 0 else (h, w)
-            bboxes_flipped = bboxes.copy()
-            bboxes_flipped[:, 0] = mask_w - bboxes[:, 2]
-            bboxes_flipped[:, 2] = mask_w - bboxes[:, 0]
-            bboxes = bboxes_flipped
-            masks = np.array([np.flip(m, axis=1).copy() for m in masks]) if len(masks) > 0 else masks
-        elif flip_dir == "vertical":
-            mask_h, mask_w = masks.shape[1], masks.shape[2] if len(masks) > 0 else (h, w)
-            bboxes_flipped = bboxes.copy()
-            bboxes_flipped[:, 1] = mask_h - bboxes[:, 3]
-            bboxes_flipped[:, 3] = mask_h - bboxes[:, 1]
-            bboxes = bboxes_flipped
-            masks = np.array([np.flip(m, axis=0).copy() for m in masks]) if len(masks) > 0 else masks
+        # --- Inverse transform: map predictions back to original orientation ---
+        if aug is None:
+            pass  # no transform needed
+
+        elif aug == "horizontal":
+            if len(masks) > 0:
+                mask_w = masks.shape[2]
+                bboxes_inv = bboxes.copy()
+                bboxes_inv[:, 0] = mask_w - bboxes[:, 2]
+                bboxes_inv[:, 2] = mask_w - bboxes[:, 0]
+                bboxes = bboxes_inv
+                masks = np.array([np.flip(m, axis=1).copy() for m in masks])
+
+        elif aug == "vertical":
+            if len(masks) > 0:
+                mask_h = masks.shape[1]
+                bboxes_inv = bboxes.copy()
+                bboxes_inv[:, 1] = mask_h - bboxes[:, 3]
+                bboxes_inv[:, 3] = mask_h - bboxes[:, 1]
+                bboxes = bboxes_inv
+                masks = np.array([np.flip(m, axis=0).copy() for m in masks])
+
+        else:
+            # Rotation inverse transform.
+            # After rotating original (H×W) image 90° CW or CCW, the rotated image
+            # has shape (W×H).  mask_H_rot = W_orig and mask_W_rot = H_orig in the
+            # model's output coordinate space.
+            _, cv2_code, inv_k = aug
+            if len(masks) > 0:
+                mask_H_rot = masks.shape[1]  # = orig W
+                mask_W_rot = masks.shape[2]  # = orig H
+                nx1 = bboxes[:, 0]
+                ny1 = bboxes[:, 1]
+                nx2 = bboxes[:, 2]
+                ny2 = bboxes[:, 3]
+                bboxes_inv = bboxes.copy()
+                if cv2_code == cv2.ROTATE_90_CLOCKWISE:
+                    # Forward CW: (orig_x, orig_y) → (orig_H - orig_y, orig_x)
+                    # Inverse:    orig_x1=ny1, orig_y1=mask_W_rot-nx2,
+                    #             orig_x2=ny2, orig_y2=mask_W_rot-nx1
+                    bboxes_inv[:, 0] = ny1
+                    bboxes_inv[:, 1] = mask_W_rot - nx2
+                    bboxes_inv[:, 2] = ny2
+                    bboxes_inv[:, 3] = mask_W_rot - nx1
+                else:  # ROTATE_90_COUNTERCLOCKWISE
+                    # Forward CCW: (orig_x, orig_y) → (orig_y, orig_W - orig_x)
+                    # Inverse:    orig_x1=mask_H_rot-ny2, orig_y1=nx1,
+                    #             orig_x2=mask_H_rot-ny1, orig_y2=nx2
+                    bboxes_inv[:, 0] = mask_H_rot - ny2
+                    bboxes_inv[:, 1] = nx1
+                    bboxes_inv[:, 2] = mask_H_rot - ny1
+                    bboxes_inv[:, 3] = nx2
+                bboxes = bboxes_inv
+                masks = np.stack([np.rot90(m, k=inv_k, axes=(0, 1)).copy() for m in masks])
 
         all_bboxes.append(bboxes)
         all_labels.append(labels)
@@ -241,7 +308,7 @@ def tta_inference(model, img, img_scale):
         all_masks.append(masks)
 
     # Concatenate all predictions
-    if all([len(b) == 0 for b in all_bboxes]):
+    if all(len(b) == 0 for b in all_bboxes):
         return np.array([]), np.array([]), np.array([]), np.array([])
 
     all_bboxes = np.concatenate(all_bboxes, axis=0)
@@ -259,7 +326,6 @@ def tta_inference(model, img, img_scale):
         cls_bboxes = all_bboxes[cls_indices]
         cls_scores = all_scores[cls_indices]
 
-        # NMS
         bboxes_tensor = torch.from_numpy(cls_bboxes).float()
         scores_tensor = torch.from_numpy(cls_scores).float()
         from torchvision.ops import nms
@@ -304,7 +370,10 @@ def gather_predictions_for_image(model, img, ori_h, ori_w, args, model_idx):
     """Run a single model (optionally with TTA) on one image and return
     predictions resized to the original image size, tagged with model_idx."""
     if args.tta:
-        bboxes, labels, scores, masks = tta_inference(model, img, tuple(args.img_scale))
+        bboxes, labels, scores, masks = tta_inference(
+            model, img, tuple(args.img_scale),
+            tta_rotation=getattr(args, "tta_rotation", False),
+        )
     else:
         result = single_image_inference(model, img, tuple(args.img_scale))
         bboxes, labels, scores, masks = process_results(result, ori_h, ori_w)
@@ -474,7 +543,10 @@ def run_single_model(args, name_to_info, test_files):
         img = load_test_image(os.path.join(args.test_dir, img_name))
 
         if args.tta:
-            bboxes, labels, scores, masks = tta_inference(model, img, img_scale)
+            bboxes, labels, scores, masks = tta_inference(
+                model, img, img_scale,
+                tta_rotation=getattr(args, "tta_rotation", False),
+            )
         else:
             result = single_image_inference(model, img, img_scale)
             bboxes, labels, scores, masks = process_results(result, ori_h, ori_w)

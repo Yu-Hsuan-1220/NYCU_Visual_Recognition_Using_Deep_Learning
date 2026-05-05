@@ -61,6 +61,36 @@ def parse_args():
                         help="Use multi-scale training")
     parser.add_argument("--no_multiscale", action="store_true", default=False,
                         help="Disable multi-scale training")
+    parser.add_argument("--color_jitter", action="store_true", default=False,
+                        help="Add PhotoMetricDistortion (brightness/contrast/saturation/hue)")
+    parser.add_argument("--diagonal_flip", action="store_true", default=False,
+                        help="Add diagonal flip for full D4 symmetry coverage")
+    parser.add_argument("--resize_ratio_min", type=float, default=0.5,
+                        help="Min scale ratio for RandomResize (default 0.5)")
+    parser.add_argument("--resize_ratio_max", type=float, default=2.0,
+                        help="Max scale ratio for RandomResize (default 2.0)")
+    parser.add_argument("--random_rotate", action="store_true", default=False,
+                        help="RandomRotate: arbitrary-angle rotation (±rotate_max_angle°), "
+                             "handles bboxes and masks. Requires mmdet RandomRotate.")
+    parser.add_argument("--rotate_max_angle", type=float, default=30.0,
+                        help="Max rotation angle in degrees for --random_rotate (default 30)")
+    parser.add_argument("--gridmask", action="store_true", default=False,
+                        help="GridMask: randomly mask rectangular grid regions for regularization")
+    parser.add_argument("--gaussian_noise", action="store_true", default=False,
+                        help="GaussianNoise: add pixel-level Gaussian noise (custom transform)")
+    parser.add_argument("--noise_std", type=float, default=15.0,
+                        help="Std of Gaussian noise in uint8 pixel range (default 15)")
+    parser.add_argument("--albu", action="store_true", default=False,
+                        help="Pixel-level transforms: GaussianBlur + CLAHE (cv2-based, no extra deps)")
+
+    # Architecture
+    parser.add_argument("--bbox_loss", type=str, default="smoothl1",
+                        choices=["smoothl1", "giou"],
+                        help="Bbox regression loss for Cascade bbox heads (default: smoothl1)")
+    parser.add_argument("--mask_head_convs", type=int, default=4,
+                        help="FCNMaskHead conv layers (default 4; try 6 or 8)")
+    parser.add_argument("--mask_roi_size", type=int, default=14,
+                        help="Mask RoIAlign output size (default 14; try 28)")
 
     # Misc
     parser.add_argument("--work_dir", type=str, default="../work_dirs",
@@ -104,10 +134,26 @@ def build_config(args, fold_idx):
         fpn_out_channels=args.fpn_channels,
         num_classes=args.num_classes,
         drop_path_rate=args.drop_path_rate,
+        bbox_loss=args.bbox_loss,
+        mask_head_convs=args.mask_head_convs,
+        mask_roi_size=args.mask_roi_size,
     )
 
     # Dataset configs
-    train_pipeline = get_train_pipeline(img_scale=img_scale, multiscale_mode=multiscale)
+    train_pipeline = get_train_pipeline(
+        img_scale=img_scale,
+        multiscale_mode=multiscale,
+        color_jitter=args.color_jitter,
+        diagonal_flip=args.diagonal_flip,
+        resize_ratio_min=args.resize_ratio_min,
+        resize_ratio_max=args.resize_ratio_max,
+        random_rotate=args.random_rotate,
+        rotate_max_angle=args.rotate_max_angle,
+        gridmask=args.gridmask,
+        gaussian_noise=args.gaussian_noise,
+        noise_std=args.noise_std,
+        albu=args.albu,
+    )
     val_pipeline = get_val_pipeline(img_scale=img_scale)
 
     train_ann_file = os.path.join(args.ann_dir, f"fold{fold_idx}_train.json")
