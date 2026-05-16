@@ -1,0 +1,10 @@
+ckpt/
+wandb/
+__pycache__/
+*.pyc
+dataset/
+hw4_realse_dataset.zip
+__MACOSX/
+pred.npz
+*.png
+!example/*.png
