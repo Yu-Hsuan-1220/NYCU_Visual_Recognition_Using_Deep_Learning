@@ -116,10 +116,37 @@ exactly the format expected by CodaBench (matches
 ### One-shot recipe
 
 ```
-bash best_run.sh
+bash best_run.sh           # original baseline (dim=48, 300 epochs)
+bash best_run_new.sh       # scale-up + multi-stage fine-tune (dim=64, ~650 epochs)
 ```
 
-trains with the recommended bundle and writes `pred.npz`.
+### Multi-stage fine-tune (`best_run_new.sh`)
+
+Two-stage NAFNet-style recipe that pushes another +0.5–1.0 dB on top of
+`best_run.sh`:
+
+- **Stage A** — `dim=64`, `num_blocks=[4,6,8,10]`, `num_refinement_blocks=6`,
+  `prompt_dims=[64,128,384]` (~47 M params). 500 epochs of Charbonnier + SSIM(0.1) +
+  FFT(0.05) at `patch=128`, `bs=8`.
+- **Stage B** — Same model architecture, **weights initialised from Stage A's EMA**
+  via `--init_from ckpt/big_stageA/ema_best.pt --init_from_kind ema`, then 150
+  epochs of pure `PSNRLoss` at `lr=5e-5`. This directly optimises the
+  evaluation metric.
+- **Inference** — `ema_best.pt` from Stage B with 8-way TTA.
+
+VRAM: ~13 GB peak, fits on a single 4090. Wall-clock: Stage A ≈ 14 h, Stage B
+≈ 4 h.
+
+New checkpoint-loading flags (only used by Stage B):
+
+| Flag | Default | Notes |
+|------|---------|-------|
+| `--init_from` | "" | Path to a `.pt`; loads model (+EMA) weights only |
+| `--init_from_kind` | ema | `ema` (recommended) or `model` |
+| `--resume` | "" | **Full** resume (opt + sched + scaler + epoch); use only when continuing the same run |
+
+`--init_from` and `--resume` are mutually exclusive — if both are passed,
+`--resume` wins.
 
 ## Performance snapshot
 

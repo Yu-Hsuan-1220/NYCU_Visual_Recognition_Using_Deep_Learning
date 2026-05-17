@@ -859,3 +859,76 @@ latent          : (1, 384, 16, 16)  →  (1, 384, 32, 32)   (now 1/8 of 256)
 - **PromptIR**: Potlapalli, Zamir, Khan, Khan. *PromptIR: Prompting for All-in-One Blind Image Restoration*. NeurIPS 2023. arXiv:2306.13090.
 - **NAFNet**: Chen, Chu, Zhang, Sun. *Simple Baselines for Image Restoration*. ECCV 2022. arXiv:2204.04676.
 - **Restormer**: Zamir, Arora, Khan, Hayat, Khan, Yang. *Restormer: Efficient Transformer for High-Resolution Image Restoration*. CVPR 2022.
+
+---
+
+## 9. 後續實驗：Scale-up + Multi-stage fine-tune
+
+baseline 拿到的分數已能跨過 strong baseline；下一步推升 PSNR 的兩個高信心
+動作（皆已落地，腳本見 [HW4/best_run_new.sh](HW4/best_run_new.sh)）：
+
+### 9.1 模型加大
+
+| 項目 | baseline (`best_run.sh`) | new (`best_run_new.sh`) |
+|------|--------------------------|--------------------------|
+| `dim` | 48 | **64** |
+| `num_blocks` | [4, 6, 6, 8] | **[4, 6, 8, 10]** |
+| `num_refinement_blocks` | 4 | **6** |
+| `prompt_dims` | [64, 128, 320] | **[64, 128, 384]**（scale 隨 latent c4=512 而升） |
+| 參數量 | 22.85 M | **43.20 M** |
+| 訓練峰值 VRAM (bs=8, patch=128, AMP) | 7.33 GB | **11.34 GB** |
+| 單 epoch 時間 (RTX 4090) | ~53 s | **~85 s** |
+
+更深的 latent stage（8→10 NAFBlock）負責整合全域結構資訊；refinement 由
+4→6 block 加強細節恢復；`prompt3` 從 320→384 channel 對應更寬的 c4=512。
+
+### 9.2 兩階段訓練
+
+#### Stage A — Pixel-loss 預訓練（500 epochs）
+
+完整套用 baseline 的 loss bundle，但跑得更久：
+
+```
+--loss charbonnier --ssim_weight 0.1 --fft_weight 0.05
+--epochs 500 --warmup_epochs 20 --lr 2e-4
+--use_ema true --ema_decay 0.999 --amp true
+--aug_flip true --aug_rot90 true
+```
+
+#### Stage B — `PSNRLoss` fine-tune（150 epochs）
+
+NAFNet 原始 recipe：用直接對齊 evaluation metric 的 loss 做最後階段：
+
+```
+PSNRLoss(pred, target) = scale * log(MSE(pred, target) + 1e-8),  scale = 10 / ln 10
+```
+
+→ 最小化 `log(MSE)` ⇔ 最大化 PSNR `= -10·log10(MSE)`。  
+→ 數值上 loss ≈ `-PSNR`，所以高 PSNR 訓練時看到的是 **負且越來越小的 loss**。
+
+關鍵切換：以 `--init_from $A/ema_best.pt --init_from_kind ema` 載入 stage A
+的 EMA 權重，**但 optimizer / scheduler / scaler / best_psnr 全部重置**（這
+是 `--init_from` 與 `--resume` 的差別）。後者會延續舊的 cosine 衰減尾端，
+正是 fine-tune 不想要的。
+
+```
+--init_from ckpt/big_stageA/ema_best.pt --init_from_kind ema
+--loss psnr
+--epochs 150 --warmup_epochs 5 --lr 5e-5
+--use_ema true --ema_decay 0.9995
+```
+
+### 9.3 為何不做的東西
+
+| 想法 | 不做的理由 |
+|------|-----------|
+| MixUp / RGB shuffle | 經驗證會降低 PSNR |
+| RandomResizedCrop | 會引入 aliasing，low-level vision 容忍度低 |
+| Progressive patch (128→192→256) | 256×256 原圖配 128 random crop 已有足夠位置多樣性 |
+| Pretrained backbone / VGG perceptual loss | 規定禁止 pretrained weights |
+| TLC、multi-ckpt ensemble | 屬於 inference-time 補救；先把 training 跑滿再回頭考慮 |
+
+### 9.4 預期結果
+
+純 scale-up（Stage A）已能帶來 +0.3~0.6 dB；PSNRLoss fine-tune（Stage B）通
+常再 +0.1~0.3 dB，合計目標 +0.5~1.0 dB over baseline。實測數字訓練完成後補上。

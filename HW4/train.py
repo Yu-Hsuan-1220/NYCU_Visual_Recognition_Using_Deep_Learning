@@ -96,7 +96,14 @@ def parse_args():
     p.add_argument("--ckpt_dir", type=str, default="HW4/ckpt/run")
     p.add_argument("--save_every", type=int, default=5)
     p.add_argument("--val_every", type=int, default=1)
-    p.add_argument("--resume", type=str, default="")
+    p.add_argument("--resume", type=str, default="",
+                   help="full resume: model + EMA + opt + sched + scaler + epoch")
+    p.add_argument("--init_from", type=str, default="",
+                   help="weights-only init from a previous ckpt "
+                        "(fresh optimizer / scheduler / best_psnr); use for fine-tune stages")
+    p.add_argument("--init_from_kind", type=str, default="ema",
+                   choices=["ema", "model"],
+                   help="which weights to seed --init_from with")
     p.add_argument("--device", type=str, default="cuda")
 
     # wandb
@@ -273,6 +280,22 @@ def main():
         start_epoch = ckpt["epoch"] + 1
         best_psnr = ckpt.get("best_psnr", -1.0)
         print(f"resumed from {args.resume} @ epoch {start_epoch}")
+    elif args.init_from and os.path.isfile(args.init_from):
+        blob = torch.load(args.init_from, map_location=device)
+        if isinstance(blob, dict):
+            pool = blob.get(args.init_from_kind)
+            if pool is None:
+                pool = blob.get("model", blob.get("ema"))
+        else:
+            pool = blob
+        missing, unexpected = model.load_state_dict(pool, strict=False)
+        if missing or unexpected:
+            print(f"[init_from] missing={len(missing)} unexpected={len(unexpected)}")
+        if ema is not None:
+            # re-seed EMA from the freshly-loaded weights so EMA doesn't lag
+            ema.module.load_state_dict(model.state_dict())
+        print(f"[init_from] loaded weights from {args.init_from} "
+              f"(kind={args.init_from_kind}); fresh optimizer + schedule")
 
     for epoch in range(start_epoch, args.epochs):
         model.train()

@@ -22,10 +22,14 @@ class CharbonnierLoss(nn.Module):
 
 
 class PSNRLoss(nn.Module):
-    """NAFNet-style: scales mse so the model directly optimizes -PSNR.
+    """NAFNet-style PSNR loss: ``scale * log(MSE)``.
 
-    Operates on RGB in [0, 1]. The constant scale 10 / ln(10) is taken
-    from NAFNet's reference implementation.
+    Minimising ``log(MSE)`` is equivalent to maximising
+    ``PSNR = -10 * log10(MSE)``, so this loss directly optimises the eval
+    metric. The constant ``scale = 10 / ln(10)`` makes the loss numerically
+    equal to ``-PSNR`` (negative when PSNR is high).
+
+    Operates on RGB in [0, 1].
     """
 
     def __init__(self, toY=False):
@@ -39,7 +43,7 @@ class PSNRLoss(nn.Module):
             pred = (pred * coef).sum(dim=1, keepdim=True) + 16.0 / 255.0
             target = (target * coef).sum(dim=1, keepdim=True) + 16.0 / 255.0
         mse = ((pred - target) ** 2).mean(dim=(1, 2, 3))
-        return -self.scale * torch.log(mse + 1e-8).mean()
+        return self.scale * torch.log(mse + 1e-8).mean()
 
 
 def _gaussian_window(window_size, sigma, channels, device, dtype):
